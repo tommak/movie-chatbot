@@ -96,13 +96,9 @@ if __name__ == "__main__":
     movies = get_movie_list(wiki_page)
     movies_cast = get_movies_cast(movies)
 
-    # Add natural language texts
-    # movies["text"] = movies.apply(lambda r: f"'{r.Title}' is a {r.Genre} Netflix movie in {r.Language} language that was released on {r['Release date']}", axis=1)
-    movies_cast["text"] = movies_cast.apply(lambda r: f"Netflix movie '{r.Title}' cast: {r.CastInfo}", axis=1)
-
     save_to = Path("./data/raw")
-    movies.to_csv(save_to / "movies_context_2024_with_meta.csv")
-    movies_cast.to_csv(save_to / "movie_cast_2024_with_meta.csv")
+    movies.to_parquet(save_to / "movies_context_2024_with_meta.parquet")
+    movies_cast.to_parquet(save_to / "movie_cast_2024_with_meta.parquet")
 
 
 

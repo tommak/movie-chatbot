@@ -17,19 +17,19 @@ from langchain_core.embeddings import Embeddings
 from langchain_core.pydantic_v1 import BaseModel, Field
 
 
-def compile_docs(path):
+def compile_docs(paths):
     
-    movies_data = pd.read_csv(path)
     docs = []
-    for _, row in movies_data.iterrows():
-        meta = {"source": "https://en.wikipedia.org/wiki/List_of_Netflix_original_films_(since_2024)",
-                "release_date_ts": row["release_date_ts"]}
-        document = Document(
-            page_content=row["text"],
-            metadata=meta
-        )
-        docs.append(document)
-
+    for path in paths:
+        movies_data = pd.read_parquet(path)
+        for _, row in movies_data.iterrows():
+            meta = {"source": "https://en.wikipedia.org/wiki/List_of_Netflix_original_films_(since_2024)",
+                    "release_date_ts": row["release_date_ts"]}
+            document = Document(
+                page_content=row["text"],
+                metadata=meta
+            )
+            docs.append(document)
     return docs
      
 
@@ -95,8 +95,11 @@ if __name__ == "__main__":
 
     context_group_name = "movies"
     embedding_function = OpenAIEmbeddings()
-    data_path = "data/processed/movies_context_2024_with_meta_cleaned.csv"
-    docs = compile_docs(data_path)
+    data_paths = [
+        "data/processed/movies_context_2024_with_meta.parquet",
+        "data/processed/movie_cast_2024_with_meta.parquet"
+    ]
+    docs = compile_docs(data_paths)
     path = "./cache/context"
      
     context = ChromaMoviesContext(context_group_name, "openai", embedding_function=embedding_function, path = path)

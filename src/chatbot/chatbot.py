@@ -14,7 +14,7 @@ from fastapi import FastAPI, Request, Form
 from typing import Any, Dict
 
 from index_data import ChromaMoviesContext
-from retriever import create_retvriever
+from retriever import create_retriever
 
 import os
 os.environ["LANGCHAIN_TRACING_V2"] = "true"
@@ -89,7 +89,7 @@ def setup_chain() -> RunnableWithMessageHistory:
     context_path = "./cache/context"
     
     context_store = ChromaMoviesContext(context_group_name, "openai", embedding_function, context_path)
-    retriever = create_retvriever(llm, context_store)
+    retriever = create_retriever(llm, context_store)
     
     chatbot = RAGChatBot(llm, retriever)
     return chatbot.create_qa_chain()
