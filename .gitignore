@@ -140,3 +140,5 @@ cache/
 data/
 docs/
 tmp/
+tests/test_data/
+notebooks/dev/

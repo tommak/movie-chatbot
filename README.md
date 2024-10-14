@@ -2,6 +2,9 @@
 
 This chatbot is designed to answer questions about movies and TV series using the latest context and general knowledge.
 
+Retrieval-Augmented Generation (RAG) chatbot designed to answer questions about movies and TV series.
+
+
 ## Features
 
 - Answers questions about movies and TV series.
