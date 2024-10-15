@@ -42,9 +42,15 @@ if __name__ == "__main__":
     ).with_columns(
         (pl.col('Title') + pl.lit(" is a ") + pl.col('Genre') + pl.lit(" Netflix movie in ") + pl.col('Language') +
         + pl.lit(" language that was released on ") + pl.col('release_date').dt.strftime("%Y-%m-%d")).alias('text'),
+        pl.col("runtime_min").fill_null(pl.median("runtime_min"))
     )
 
     # Process movies data
+
+    def meta_text():
+        return  (pl.col("topic") + " info for movie '" + pl.col("Title") + "' (released on: " + pl.col("release_date").dt.strftime("%Y-%m-%d") +
+            ", Genre: " + pl.col("Genre") + ", Language: " + pl.col("Language") + ", Runtime: " + pl.col("runtime_min").cast(pl.Utf8) + " minutes)"
+        )
 
     movies_data_l = []
     meta_cols = ["parse_ts", "TitleId", "SourceYear", "Title"]
@@ -69,12 +75,16 @@ if __name__ == "__main__":
     movies_clean_cols = ["TitleId", "SourceYear", "Title", "Genre", "runtime_min", "Language", "release_date"]
     movies_data_df = pl.DataFrame(movies_data_l).with_columns(
         pl.col("parse_ts").str.to_datetime(),
-    ).join(movies_clean.select(movies_clean_cols), on=["TitleId", "SourceYear"], how="left")
-
+    ).join(movies_clean.select(movies_clean_cols), on=["TitleId", "SourceYear"], how="left").with_columns(
+        (meta_text() + ": " + pl.col("text")).alias("text")
+    )
+    
     # Save processed data
+
+    data_version = "dver01"
 
     save_to = Path("/Users/tamara/Documents/Projects/movie-chatbot/data/processed")
     movies_clean.select(["Title", "Genre", "Language", "SourceYear", "TitleId", "year", "release_date", 
-                         "runtime_min", "text", "parse_ts"]).write_csv(save_to / "movies.csv")
-    movies_data_df.write_csv(save_to / "movie_data.csv")
+                         "runtime_min", "text", "parse_ts"]).write_parquet(save_to / f"movies_{data_version}.parquet")
+    movies_data_df.write_parquet(save_to / f"movies_data_{data_version}.parquet")
 

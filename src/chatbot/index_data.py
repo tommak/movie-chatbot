@@ -5,7 +5,9 @@ This script indexes a database of movies using the Chroma vector store and OpenA
 import os
 from typing import List, Optional
 import pandas as pd
+import polars as pl
 from pathlib import Path
+import datetime as dt
 
 from langchain_chroma import Chroma
 from langchain.chains.combine_documents import create_stuff_documents_chain
@@ -17,19 +19,31 @@ from langchain_core.embeddings import Embeddings
 from langchain_core.pydantic_v1 import BaseModel, Field
 
 
-def compile_docs(paths):
+def compile_docs(path: Path, data_version: str):
     
     docs = []
-    for path in paths:
-        movies_data = pd.read_parquet(path)
-        for _, row in movies_data.iterrows():
-            meta = {"source": "https://en.wikipedia.org/wiki/List_of_Netflix_original_films_(since_2024)",
-                    "release_date_ts": row["release_date_ts"]}
+
+    data_paths = [
+        (path / f"movies_{data_version}.parquet", False),
+        (path / f"movies_data_{data_version}.parquet", True)
+    ]
+
+    for data_path, data_with_topic in data_paths:
+        movies_data = pl.read_parquet(data_path)
+        movies_data = movies_data.with_columns(
+            (pl.col("release_date").dt.timestamp("us") // 1e6).alias("release_date_ts")
+        )
+        meta_names = ["release_date_ts", "Title", "runtime_min", "Genre", "Language"]
+        for row in movies_data.iter_rows(named=True):
+            meta = {nm: row[nm] for nm in meta_names}
+            meta["source"]= f"https://en.wikipedia.org/wiki/List_of_Netflix_original_films_({row['SourceYear']})"
+            meta["topic"] = row["topic"] if data_with_topic else "Movie-Info"
             document = Document(
-                page_content=row["text"],
-                metadata=meta
-            )
+                    page_content=row["text"],
+                    metadata=meta
+                )
             docs.append(document)
+
     return docs
      
 
@@ -95,18 +109,19 @@ if __name__ == "__main__":
 
     context_group_name = "movies"
     embedding_function = OpenAIEmbeddings()
-    data_paths = [
-        "data/processed/movies_context_2024_with_meta.parquet",
-        "data/processed/movie_cast_2024_with_meta.parquet"
-    ]
-    docs = compile_docs(data_paths)
-    path = "./cache/context"
+
+    path = Path("data/processed/")
+    data_version = "dver01"
+    docs = compile_docs(path, data_version)
+    
+    cache_path = "./cache/context"
      
-    context = ChromaMoviesContext(context_group_name, "openai", embedding_function=embedding_function, path = path)
+    index_version = f"openai_{data_version}_indver01"
+    context = ChromaMoviesContext(context_group_name, index_version, embedding_function=embedding_function, path=cache_path)
     context.index_docs(docs)
 
     # Test semantic search
-    ts = pd.Timestamp("2024-05-01").timestamp()
+    ts = dt.datetime(2024, 5, 1).timestamp()
     search_res = context.vectorstore.similarity_search_with_score(query="Japanese movie", filter={"release_date_ts": {"$gte": ts}}, k=5)
     for doc, score in search_res:
         print(f"[{score}] " + doc.page_content)
