@@ -1,3 +1,5 @@
+import uuid
+import datetime as dt
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_chroma import Chroma
@@ -15,6 +17,7 @@ from typing import Any, Dict
 
 from index_data import ChromaMoviesContext
 from retriever import create_retriever
+from prompts import qa_system_prompt
 
 import os
 os.environ["LANGCHAIN_TRACING_V2"] = "true"
@@ -42,24 +45,27 @@ class RAGChatBot:
         
     @staticmethod
     def get_session_history(session_id: str) -> BaseChatMessageHistory:
+        if session_id is None:
+            return ChatMessageHistory()
+        
         path = f"./cache/chat_history/{session_id}"
         return FileChatMessageHistory(path)
 
     def create_qa_chain(self) -> RunnableWithMessageHistory:
-        system_prompt = (
-            """
-            You are an assistant answering questions about movies and tv series. Below you are given a context about the latest movies.
-            Answer the question giving priority to the context below, but also use your general knowledge and the information about the movies released earlier.
-            If there are multiple movies with the same name, give priority to the latest one. If needed, mention all existing movies with the given name.
-            Today is 2024-09-12.
+        # system_prompt = (
+        #     """
+        #     You are an assistant answering questions about movies and tv series. Below you are given a context about the latest movies.
+        #     Answer the question giving priority to the context below, but also use your general knowledge and the information about the movies released earlier.
+        #     If there are multiple movies with the same name, give priority to the latest one. If needed, mention all existing movies with the given name.
+        #     Today is {current_date}.
 
-            {context}
-        """
-        )
+        #     {context}
+        # """
+        # )
 
         qa_prompt = ChatPromptTemplate.from_messages(
             [
-                ("system", system_prompt),
+                ("system", qa_system_prompt),
                 MessagesPlaceholder("chat_history"),
                 ("human", "{input}"),
             ]
@@ -77,26 +83,29 @@ class RAGChatBot:
         return conversational_rag_chain
 
 
-def setup_chain() -> RunnableWithMessageHistory:
-    llm_config: Dict[str, Any] = {
-        "model": "gpt-3.5-turbo",
-        "temperature": 0
-    }
-
-    context_group_name = "movies"
+def setup_chain(chain_config: dict) -> RunnableWithMessageHistory:
+    llm_config = chain_config["llm_config"]
     llm = ChatOpenAI(**llm_config)
     embedding_function = OpenAIEmbeddings()
-    context_path = "./cache/context"
     
-    context_store = ChromaMoviesContext(context_group_name, "openai", embedding_function, context_path)
+    context_group_name = chain_config["RAG"]["context_group_name"]
+    context_path = chain_config["RAG"]["context_path"]
+    context_version = chain_config["RAG"]["context_version"]
+    context_store = ChromaMoviesContext(context_group_name, context_version, embedding_function, context_path)
     retriever = create_retriever(llm, context_store)
     
     chatbot = RAGChatBot(llm, retriever)
     return chatbot.create_qa_chain()
 
 
-def run_console_chat(stream: bool = False, session_id: str = "default_id") -> None:
-    chain = setup_chain()
+def run_console_chat(chain_config, stream: bool = False, session_id: str = None) -> None:
+
+    if not session_id:
+        session_id = str(uuid.uuid4())
+
+    current_date = dt.datetime.now().strftime("%Y-%m-%d")
+
+    chain = setup_chain(chain_config)
     
     print("Movie-Chatbot: Hi! I'm a Movie Chatbot. How can I assist you today?")
     while True:
@@ -107,7 +116,8 @@ def run_console_chat(stream: bool = False, session_id: str = "default_id") -> No
         else:
             print(f"Movie-Chatbot: ")
             if not stream:
-                response = chain.invoke({"input": user_input},
+                
+                response = chain.invoke({"input": user_input, "current_date": current_date},
                                         config={"configurable": {"session_id": session_id}})["answer"]
                 if "context" in response:
                     print("My context: ")
@@ -116,7 +126,7 @@ def run_console_chat(stream: bool = False, session_id: str = "default_id") -> No
                 print("-"*50)
                 print(response)
             else:
-                for r in chain.stream({"input": user_input},
+                for r in chain.stream({"input": user_input, "current_date": current_date},
                                     config={"configurable": {"session_id": session_id}}):
                     if "context" in r:
                         print("My context: ")
@@ -127,9 +137,10 @@ def run_console_chat(stream: bool = False, session_id: str = "default_id") -> No
                 print("\n")
 
 
-def serve_api_endpoint() -> None:
+def serve_api_endpoint(chain_config: dict) -> None:
+    current_date = dt.datetime.now().strftime("%Y-%m-%d")
     app = FastAPI()
-    chain = setup_chain()
+    chain = setup_chain(chain_config)
 
     @app.get("/")
     def read_root(request: Request) -> Dict[str, str]:
@@ -137,7 +148,7 @@ def serve_api_endpoint() -> None:
 
     @app.post("/prompt")
     def process_prompt(prompt: str = Form(...), session_id: str = Form(...)) -> Dict[str, str]:
-        response = chain.invoke({"input": prompt},
+        response = chain.invoke({"input": prompt, "current_date": current_date},
                                 config={"configurable": {"session_id": session_id}})["answer"]
         return {"response": response}
 
@@ -145,6 +156,20 @@ def serve_api_endpoint() -> None:
 
 
 if __name__ == "__main__":
-    session_id = "session_1"
-    run_console_chat(stream=False, session_id=session_id)
+
+    chain_config = {
+        "llm_config": {
+            "model": "gpt-3.5-turbo",
+            "temperature": 0
+        },
+        "RAG": {
+            "context_group_name": "movies",
+            "context_path": "./cache/context",
+            "context_version": "openai_dver01_indver01"
+
+        }
+    }
+
+    session_id = None
+    run_console_chat(chain_config, stream=False, session_id=session_id)
     # serve_api_endpoint()

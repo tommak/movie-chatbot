@@ -55,7 +55,7 @@ class Search(BaseModel):
         description="Similarity search query applied to movies database.",
     )
     # release_date_min_ts: Optional[int] = Field(None, description="The earliest release date of a movies to consider, in the form of UNIX timestamp")
-    release_date_min: Optional[str] = Field(None, description="The earliest release date of a movies to consider, use the format '2024-09-11' ")
+    release_date_min: Optional[str] = Field(None, description="The earliest release date of a movies to consider, use the format '2024-09-11'. ")
 
 
 class ChromaMoviesContext:

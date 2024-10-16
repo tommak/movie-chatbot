@@ -11,37 +11,33 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
 from langchain_core.output_parsers import StrOutputParser
 
+from prompts import retriever_query_analyzer_prompt, contextualize_qa_system_prompt
+
 
 def get_query_analyzer(llm):
-    system = """You are an expert at converting user questions into database queries. \
-    You have access to a database of movies. You need to understand if user is defining any
-    time limits for the movies he is interested in and formulate the earliers acceptable date. 
-    Today is 2024-09-12.
-    Given a question, return a list of database queries optimized to retrieve the most relevant results."""
+    # system = """You are an expert at converting user questions into database queries. \
+    # You have access to a database of movies. You need to understand if user is defining any
+    # time limits for the movies he is interested in and formulate the earliers acceptable date. 
+    # Today is 2024-09-12.
+    # Given a question, return a list of database queries optimized to retrieve the most relevant results."""
 
     prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", system),
+            ("system", retriever_query_analyzer_prompt),
             ("human", "{input}"),
         ]
     )
 
     structured_llm = llm.with_structured_output(Search)
-    query_analyzer = {"input": RunnablePassthrough()} | prompt | structured_llm
+    query_analyzer = {"input": RunnablePassthrough(), "current_date": RunnablePassthrough()} | prompt | structured_llm
     return query_analyzer
 
 
 def create_retriever(llm, context_store):
-    contextualize_q_system_prompt = (
-        "Given a chat history and the latest user question "
-        "which might reference context in the chat history, "
-        "formulate a standalone question which can be understood "
-        "without the chat history. Do NOT answer the question, "
-        "just reformulate it if needed and otherwise return it as is."
-    )
+    
     contextualize_q_prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", contextualize_q_system_prompt),
+            ("system", contextualize_qa_system_prompt),
             MessagesPlaceholder("chat_history"),
             ("human", "{input}"),
         ]

@@ -87,4 +87,5 @@ if __name__ == "__main__":
     movies_clean.select(["Title", "Genre", "Language", "SourceYear", "TitleId", "year", "release_date", 
                          "runtime_min", "text", "parse_ts"]).write_parquet(save_to / f"movies_{data_version}.parquet")
     movies_data_df.write_parquet(save_to / f"movies_data_{data_version}.parquet")
+    movies_data_df.write_csv(save_to / f"movies_data_{data_version}.csv")
 

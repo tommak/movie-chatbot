@@ -137,7 +137,10 @@ cython_debug/
 .vscode/
 
 cache/
-data/
+/data/raw/
+/data/processed/
+/data/external/
+
 docs/
 tmp/
 tests/test_data/
